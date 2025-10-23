@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>WB Orders Demo</title>
+    <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+<main>
+    <h1>Поиск заказа</h1>
+    <div class="row">
+        <input id="oid" placeholder="Введите order_uid" />
+        <button id="btn">Найти</button>
+    </div>
+    <pre id="out">Введите order_uid и нажмите «Найти»</pre>
+</main>
+<script>
+    const $ = s => document.querySelector(s);
+    $('#btn').onclick = async () => {
+        const id = $('#oid').value.trim();
+        if (!id) return;
+        $('#out').textContent = 'Загрузка…';
+        try {
+            const res = await fetch(`/order/${encodeURIComponent(id)}`);
+            if (!res.ok) throw new Error('Not found');
+            const json = await res.json();
+            $('#out').textContent = JSON.stringify(json, null, 2);
+        } catch (e) {
+            $('#out').textContent = 'Ошибка: ' + e.message;
+        }
+    };
+</script>
+</body>
+</html>

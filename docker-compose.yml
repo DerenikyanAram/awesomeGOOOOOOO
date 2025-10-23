@@ -1,0 +1,83 @@
+version: "3.9"
+services:
+  postgres:
+    image: postgres:16
+    container_name: pg
+    environment:
+      POSTGRES_DB: orders
+      POSTGRES_USER: demo
+      POSTGRES_PASSWORD: demo
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql/001_init.sql:/docker-entrypoint-initdb.d/001_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo -d orders"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  zookeeper:
+    image: bitnami/zookeeper:3.9
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+    ports:
+      - "2181:2181"
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "echo ruok | nc 127.0.0.1 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: bitnami/kafka:3.7
+    environment:
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - ALLOW_PLAINTEXT_LISTENER=yes
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka:9092
+      - KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE=true
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    ports:
+      - "8085:8080"
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+    depends_on:
+      - kafka
+
+  app:
+    build: ./app
+    environment:
+      - HTTP_ADDR=${HTTP_ADDR:-:8081}
+      - PG_HOST=${PG_HOST:-postgres}
+      - PG_PORT=${PG_PORT:-5432}
+      - PG_DB=${PG_DB:-orders}
+      - PG_USER=${PG_USER:-demo}
+      - PG_PASSWORD=${PG_PASSWORD:-demo}
+      - PG_SSLMODE=${PG_SSLMODE:-disable}
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - KAFKA_TOPIC=${KAFKA_TOPIC:-orders}
+      - KAFKA_GROUP=${KAFKA_GROUP:-wb-orders-demo}
+      - CACHE_PRELOAD_LIMIT=${CACHE_PRELOAD_LIMIT:-2000}
+      - CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-10000}
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./static:/static:ro
+      - ./sql/001_init.sql:/migrations/001_init.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+volumes:
+  pgdata:
